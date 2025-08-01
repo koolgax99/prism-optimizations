@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+python-multipart
+langchain-neo4j
+langchain-openai
+langchain-community
+langchain-huggingface
+langchain-core
+langchain-text-splitters
+neo4j
+python-dotenv
+numpy
+asyncio
+sentence-transformers
