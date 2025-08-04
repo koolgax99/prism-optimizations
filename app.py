@@ -27,18 +27,6 @@ logger = logging.getLogger(__name__)
 
 # ---------------- Models ----------------
 
-class QARequest(BaseModel):
-    question: str
-    model: str = "gpt-4o"
-    document_names: Optional[List[str]] = None
-    session_id: str = "default_session"
-    mode: str = "graph_vector_fulltext"
-    write_access: bool = True
-    neo4j_uri: Optional[str] = None
-    neo4j_username: Optional[str] = None
-    neo4j_password: Optional[str] = None
-    neo4j_database: Optional[str] = None
-
 class QAResponse(BaseModel):
     status: str
     data: Dict[str, Any]
@@ -90,18 +78,19 @@ def qa_form_endpoint(
     session_id: str = Form("default_session"),
     mode: str = Form("graph_vector_fulltext"),
     write_access: bool = Form(True),
-    neo4j_uri: Optional[str] = Form(None),
-    neo4j_username: Optional[str] = Form(None),
-    neo4j_password: Optional[str] = Form(None),
-    neo4j_database: Optional[str] = Form(None)
+    uri: Optional[str] = Form(None),
+    userName: Optional[str] = Form(None),
+    password: Optional[str] = Form(None),
+    database: Optional[str] = Form(None),
+    evaluation: Optional[bool] = Form(False)
 ):
     try:
-        uri = neo4j_uri or DEFAULT_NEO4J_URI
-        username = neo4j_username or DEFAULT_NEO4J_USERNAME
-        password = neo4j_password or DEFAULT_NEO4J_PASSWORD
-        database = neo4j_database or DEFAULT_NEO4J_DATABASE
+        neo4j_uri = uri or DEFAULT_NEO4J_URI
+        neo4j_username = userName or DEFAULT_NEO4J_USERNAME
+        neo4j_password = password or DEFAULT_NEO4J_PASSWORD
+        neo4j_database = database or DEFAULT_NEO4J_DATABASE
 
-        graph = create_graph_database_connection(uri, username, password, database)
+        graph = create_graph_database_connection(neo4j_uri, neo4j_username, neo4j_password, neo4j_database)
 
         result = QA_RAG(
             graph=graph,
@@ -110,7 +99,8 @@ def qa_form_endpoint(
             document_names=None,
             session_id=session_id,
             mode=mode,
-            write_access=write_access
+            write_access=write_access,
+            evaluation=evaluation
         )
 
         response = { "status": "success", "data": result }

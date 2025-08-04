@@ -28,8 +28,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import ChatOpenAI
 
 # Local imports
-
 from src.constants import *
+# Assuming the user's provided RAGEvaluator is in this file
+from src.metrics.evalaution import RAGEvaluator 
 load_dotenv() 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -420,7 +421,7 @@ def process_chat_response(messages, history, question, model, graph, document_na
             content, result, total_tokens,formatted_docs = process_documents(docs, question, messages, llm, model, chat_mode_settings)
         else:
             content = "I couldn't find any relevant documents to answer your question."
-            result = {"sources": list(), "nodedetails": list(), "entities": list()}
+            result = {"sources": list(), "nodedetails": {"chunkdetails": []}, "entities": list()}
             total_tokens = 0
             formatted_docs = ""
         
@@ -430,13 +431,29 @@ def process_chat_response(messages, history, question, model, graph, document_na
         summarization_thread = threading.Thread(target=summarize_and_log, args=(history, messages, llm))
         summarization_thread.start()
         logging.info("Summarization thread started.")
-        # summarize_and_log(history, messages, llm)
-        metric_details = {"question":question,"contexts":formatted_docs,"answer":content}
+
+        metrics = {}
+
+        if chat_mode_settings.get("evaluation", False):
+            # --- Run RAGAS-based Evaluation ---
+            evaluator = RAGEvaluator(llm=llm, embeddings=EMBEDDING_FUNCTION)
+            metric_details = {
+                "question": question,
+                "contexts": formatted_docs,
+                "answer": content,
+                "nodedetails": result.get("nodedetails", {}),
+                "entities": result.get("entities", {})
+            }
+            # For a real scenario, you might have a ground truth dataset for context_recall
+            ground_truth_answer = None 
+            metrics = evaluator.evaluate_using_ragas(metric_details, ground_truth_answer)
+            # --------------------
+
         return {
             "session_id": "",  
             "message": content,
             "info": {
-                # "metrics" : metrics,
+                "metrics" : metrics, # Add metrics to the response
                 "sources": result["sources"],
                 "model": model_version,
                 "nodedetails": result["nodedetails"],
@@ -444,7 +461,6 @@ def process_chat_response(messages, history, question, model, graph, document_na
                 "response_time": 0,
                 "mode": chat_mode_settings["mode"],
                 "entities": result["entities"],
-                "metric_details": metric_details,
             },
             
             "user": "chatbot"
@@ -464,7 +480,6 @@ def process_chat_response(messages, history, question, model, graph, document_na
                 "error": f"{type(e).__name__}: {str(e)}",
                 "mode": chat_mode_settings["mode"],
                 "entities": [],
-                "metric_details": {},
             },
             "user": "chatbot"
         }
@@ -586,17 +601,23 @@ def get_chat_mode_settings(mode,settings_map=CHAT_MODE_CONFIG_MAP):
     return chat_mode_settings
 
     
-def QA_RAG(graph,model, question, document_names, session_id, mode, write_access=True):
+def QA_RAG(graph,model, question, document_names, session_id, mode, write_access=True, evaluation=False):
     logging.info(f"Chat Mode: {mode}")
+
+    history = create_neo4j_chat_message_history(graph, session_id, write_access)
+    messages = history.messages
+
+    user_question = HumanMessage(content=question)
+    messages.append(user_question)
+
+    chat_mode_settings = get_chat_mode_settings(mode)
+    chat_mode_settings["evaluation"] = evaluation
 
     # Check if iterative mode is requested
     if mode == CHAT_ITERATIVE_MULTIHOP_MODE:
         # Import the iterative module
         from src.iterative_multihop_retrieval import iterative_multihop_qa
-        
-        # Get chat mode settings
-        chat_mode_settings = get_chat_mode_settings(mode=mode)
-        
+
         # Perform iterative multi-hop QA
         result = iterative_multihop_qa(
             graph=graph,
@@ -612,7 +633,6 @@ def QA_RAG(graph,model, question, document_names, session_id, mode, write_access
     if mode == CHAT_GRAPH_OF_THOUGHT_MODE:
         from src.got import graph_of_thought_qa
 
-        chat_mode_settings = get_chat_mode_settings(mode=mode)
         result = graph_of_thought_qa(
             graph=graph,
             model=model,
@@ -624,13 +644,6 @@ def QA_RAG(graph,model, question, document_names, session_id, mode, write_access
         return result
 
 
-    history = create_neo4j_chat_message_history(graph, session_id, write_access)
-    messages = history.messages
-
-    user_question = HumanMessage(content=question)
-    messages.append(user_question)
-
-    chat_mode_settings = get_chat_mode_settings(mode=mode)
     result = process_chat_response(messages,history, question, model, graph, document_names,chat_mode_settings)
 
     result["session_id"] = session_id

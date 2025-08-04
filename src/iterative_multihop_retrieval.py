@@ -10,8 +10,10 @@ import time
 from src.constants import *
 from src.QA_integration import (
     get_llm, get_neo4j_retriever, create_document_retriever_chain,
-    retrieve_documents, format_documents, get_rag_chain
+    retrieve_documents, format_documents, get_rag_chain, EMBEDDING_FUNCTION
 )
+from src.metrics.evalaution import RAGEvaluator
+
 
 # Prompts for iterative retrieval
 QUERY_DECOMPOSITION_PROMPT = """
@@ -350,6 +352,7 @@ def iterative_multihop_qa(graph, model, question, document_names, chat_mode_sett
         all_sources = set()
         all_entities = {"entityids": set(), "relationshipids": set()}
         all_chunks = []
+        all_formatted_docs = []
         
         for result in retrieval_results:
             all_sources.update(result["sources"])
@@ -362,12 +365,34 @@ def iterative_multihop_qa(graph, model, question, document_names, chat_mode_sett
             for doc in result.get("docs", []):
                 if "chunkdetails" in doc.metadata:
                     all_chunks.extend(doc.metadata["chunkdetails"])
+
+            all_formatted_docs.append(result["formatted_docs"])
+        
+        all_formatted_docs = "\n---\n".join(all_formatted_docs)
+
+        metrics = {}
+
+        if chat_mode_settings.get("evaluation", False):
+            # --- Run RAGAS-based Evaluation ---
+            evaluator = RAGEvaluator(llm=llm, embeddings=EMBEDDING_FUNCTION)
+            metric_details = {
+                "question": question,
+                "contexts": all_formatted_docs,
+                "answer": final_answer,
+                "nodedetails": result.get("nodedetails", {}),
+                "entities": result.get("entities", {})
+            }
+            # For a real scenario, you might have a ground truth dataset for context_recall
+            ground_truth_answer = None 
+            metrics = evaluator.evaluate_using_ragas(metric_details, ground_truth_answer)
+            # --------------------
         
         total_time = time.time() - start_time
-        
+
         return {
             "message": final_answer,
             "info": {
+                "metrics": metrics,
                 "sources": list(all_sources),
                 "model": model_name,
                 "mode": "iterative_multihop",
