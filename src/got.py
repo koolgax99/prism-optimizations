@@ -9,7 +9,7 @@ from src.QA_integration import (
     get_llm, get_neo4j_retriever, create_document_retriever_chain,
     retrieve_documents, format_documents, get_rag_chain, EMBEDDING_FUNCTION
 )
-from src.metrics.evalaution import RAGEvaluator
+from src.metrics.evaluation import RAGEvaluator
 
 # Prompts for Graph of Thoughts
 THOUGHT_GENERATION_PROMPT = """

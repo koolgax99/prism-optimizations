@@ -30,7 +30,7 @@ from langchain_openai import ChatOpenAI
 # Local imports
 from src.constants import *
 # Assuming the user's provided RAGEvaluator is in this file
-from src.metrics.evalaution import RAGEvaluator 
+from src.metrics.evaluation import RAGEvaluator 
 load_dotenv() 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")

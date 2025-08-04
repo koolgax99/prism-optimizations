@@ -4,6 +4,8 @@ from langchain_neo4j import Neo4jGraph
 from src.QA_integration import *
 from dotenv import load_dotenv
 import os
+import random
+import string
 
 # Load environment variables from .env file
 load_dotenv()
@@ -23,11 +25,11 @@ def main():
 
     result = QA_RAG(
         graph=graph,
-        model="gpt-4o",
+        model="llama-4-scout",
         question="What genetic mutations are associated with SCLC?",
         document_names=None,
         session_id="test_session",
-        mode="graph_vector_fulltext",
+        mode="graph_of_thought",
         write_access=True
         )
 
@@ -42,14 +44,18 @@ def test_iterative_mode():
 
     graph = create_graph_database_connection(NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE)
 
+    characters = string.ascii_letters + string.digits
+    random_string = ''.join(random.choice(characters) for i in range(12))
+    
+
     # Test with a complex question
     result = QA_RAG(
         graph=graph,
-        model="gpt-4o",
+        model="llama-4-scout",
         question="You are assisting a research scientist. Focus on molecular mechanisms, research data, and scientific literature. Question: Describe the molecular pathways in lung cancer",
         document_names=None,
-        session_id="test_iterative",
-        mode="iterative_multihop",  # Use the new mode
+        session_id=random_string,
+        mode="graph_of_thought",  # Use the new mode
         write_access=True
     )
     
@@ -60,4 +66,3 @@ def test_iterative_mode():
 
 if __name__ == "__main__":
     result = test_iterative_mode()
-    print(result.get("message", "No message returned"))
